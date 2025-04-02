@@ -126,7 +126,11 @@ func (e distributorMaxOTLPRequestSizeErr) Error() string {
 	if e.actual < 0 {
 		msgSizeDesc = ""
 	}
-	return globalerror.DistributorMaxOTLPRequestSize.MessageWithPerInstanceLimitConfig(fmt.Sprintf("the incoming OTLP request has been rejected because its message size%s is larger than the allowed limit of %d bytes", msgSizeDesc, e.limit), maxOTLPRequestSizeFlag)
+	return globalerror.DistributorMaxOTLPRequestSize.MessageWithStrategyAndPerInstanceLimitConfig(
+		fmt.Sprintf("the incoming OTLP request has been rejected because its message size%s is larger than the allowed limit of %d bytes", msgSizeDesc, e.limit),
+		"Please reduce the size of the request by adjusting batch processor in otel pipeline (send_batch_max_size)",
+		"distributor.max-otlp-request-size",
+	)
 }
 
 func handler(

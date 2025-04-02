@@ -107,6 +107,12 @@ func (id ID) MessageWithPerInstanceLimitConfig(msg, flag string, addFlags ...str
 	return fmt.Sprintf("%s (%s%s). To adjust the related limit%s, configure %s, or contact your service administrator.", msg, errPrefix, id, plural, flagsList)
 }
 
+func (id ID) MessageWithStrategyAndPerInstanceLimitConfig(msg, strategy, flag string, addFlags ...string) string {
+	flagsList, plural := buildFlagsList(flag, addFlags...)
+	return fmt.Sprintf("%s (%s%s). %s. Otherwise, to adjust the related limit%s, configure %s, or contact your service administrator.",
+		msg, errPrefix, id, strategy, plural, flagsList)
+}
+
 // MessageWithPerTenantLimitConfig returns the provided msg, appending the error id and a suggestion on
 // which configuration flag(s) to use to change the per-tenant limit.
 func (id ID) MessageWithPerTenantLimitConfig(msg, flag string, addFlags ...string) string {
