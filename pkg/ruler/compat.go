@@ -8,6 +8,7 @@ package ruler
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/go-kit/log"
@@ -19,6 +20,7 @@ import (
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/metadata"
+	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
@@ -213,6 +215,7 @@ type RulesLimits interface {
 	RulerSyncRulesOnChangesEnabled(userID string) bool
 	RulerProtectedNamespaces(userID string) []string
 	RulerMaxIndependentRuleEvaluationConcurrencyPerTenant(userID string) int64
+	RulerAlertRelabelConfigs(userID string) []*relabel.Config
 }
 
 func MetricsQueryFunc(qf rules.QueryFunc, userID string, queries, failedQueries *prometheus.CounterVec, remoteQuerier bool) rules.QueryFunc {
@@ -325,6 +328,20 @@ type RulesManager interface {
 
 // ManagerFactory is a function that creates new RulesManager for given user and notifier.Manager.
 type ManagerFactory func(ctx context.Context, userID string, notifier *notifier.Manager, logger log.Logger, reg prometheus.Registerer) RulesManager
+
+type NotifierOptionsFactory func(userID string, queueCapacity int, drainOnShutdown bool, reg prometheus.Registerer, doFunc func(ctx context.Context, client *http.Client, req *http.Request) (*http.Response, error)) *notifier.Options
+
+func DefaultNotifierOptionsFactory(limits RulesLimits) NotifierOptionsFactory {
+	return func(userID string, queueCapacity int, drainOnShutdown bool, reg prometheus.Registerer, doFunc func(ctx context.Context, client *http.Client, req *http.Request) (*http.Response, error)) *notifier.Options {
+		return &notifier.Options{
+			QueueCapacity:   queueCapacity,
+			DrainOnShutdown: drainOnShutdown,
+			Registerer:      reg,
+			RelabelConfigs:  limits.RulerAlertRelabelConfigs(userID),
+			Do:              doFunc,
+		}
+	}
+}
 
 func DefaultTenantManagerFactory(
 	cfg Config,

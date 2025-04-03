@@ -46,7 +46,7 @@ func TestDefaultMultiTenantManager_SyncFullRuleGroups(t *testing.T) {
 		user2Group1 = createRuleGroup("group-1", user2, createRecordingRule("sum:metric_1", "sum(metric_1)"))
 	)
 
-	m, err := NewDefaultMultiTenantManager(Config{RulePath: t.TempDir()}, managerMockFactory, nil, logger, nil)
+	m, err := NewDefaultMultiTenantManager(Config{RulePath: t.TempDir()}, managerMockFactory, notifierOptionsMockFactory, nil, logger, nil)
 	require.NoError(t, err)
 
 	// Initialise the manager with some rules and start it.
@@ -132,7 +132,7 @@ func TestDefaultMultiTenantManager_SyncPartialRuleGroups(t *testing.T) {
 		user2Group1 = createRuleGroup("group-1", user2, createRecordingRule("sum:metric_1", "sum(metric_1)"))
 	)
 
-	m, err := NewDefaultMultiTenantManager(Config{RulePath: t.TempDir()}, managerMockFactory, nil, logger, nil)
+	m, err := NewDefaultMultiTenantManager(Config{RulePath: t.TempDir()}, managerMockFactory, notifierOptionsMockFactory, nil, logger, nil)
 	require.NoError(t, err)
 	t.Cleanup(m.Stop)
 
@@ -308,7 +308,7 @@ func TestDefaultMultiTenantManager_WaitsToDrainPendingNotificationsOnShutdown(t 
 		NotificationQueueCapacity: 1000,
 		NotificationTimeout:       10 * time.Second,
 	}
-	m, err := NewDefaultMultiTenantManager(cfg, managerMockFactory, nil, logger, nil)
+	m, err := NewDefaultMultiTenantManager(cfg, managerMockFactory, notifierOptionsMockFactory, nil, logger, nil)
 	require.NoError(t, err)
 
 	m.SyncFullRuleGroups(ctx, map[string]rulespb.RuleGroupList{
@@ -440,6 +440,15 @@ func assertRuleGroupsMappedOnDisk(t *testing.T, m *DefaultMultiTenantManager, us
 		assert.Equal(t, string(expectedYAML), string(content))
 
 		require.NoError(t, file.Close())
+	}
+}
+
+func notifierOptionsMockFactory(userID string, queueCapacity int, drainOnShutdown bool, reg prometheus.Registerer, doFunc func(ctx context.Context, client *http.Client, req *http.Request) (*http.Response, error)) *notifier.Options {
+	return &notifier.Options{
+		QueueCapacity:   queueCapacity,
+		DrainOnShutdown: drainOnShutdown,
+		Registerer:      reg,
+		Do:              doFunc,
 	}
 }
 

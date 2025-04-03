@@ -22,6 +22,7 @@ import (
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/notifier"
 	promRules "github.com/prometheus/prometheus/rules"
@@ -32,9 +33,10 @@ import (
 )
 
 type DefaultMultiTenantManager struct {
-	cfg            Config
-	notifierCfg    *config.Config
-	managerFactory ManagerFactory
+	cfg                    Config
+	notifierCfg            *config.Config
+	managerFactory         ManagerFactory
+	notifierOptionsFactory NotifierOptionsFactory
 
 	mapper *mapper
 
@@ -49,6 +51,8 @@ type DefaultMultiTenantManager struct {
 	notifiersMtx sync.Mutex
 	notifiers    map[string]*rulerNotifier
 
+	relabelConfigs map[string][]*relabel.Config
+
 	managersTotal                 prometheus.Gauge
 	lastReloadSuccessful          *prometheus.GaugeVec
 	lastReloadSuccessfulTimestamp *prometheus.GaugeVec
@@ -59,7 +63,7 @@ type DefaultMultiTenantManager struct {
 	rulerIsRunning atomic.Bool
 }
 
-func NewDefaultMultiTenantManager(cfg Config, managerFactory ManagerFactory, reg prometheus.Registerer, logger log.Logger, dnsResolver AddressProvider) (*DefaultMultiTenantManager, error) {
+func NewDefaultMultiTenantManager(cfg Config, managerFactory ManagerFactory, notifierOptionsFactory NotifierOptionsFactory, reg prometheus.Registerer, logger log.Logger, dnsResolver AddressProvider) (*DefaultMultiTenantManager, error) {
 	refreshMetrics := discovery.NewRefreshMetrics(reg)
 	ncfg, err := buildNotifierConfig(&cfg, dnsResolver, refreshMetrics)
 	if err != nil {
@@ -99,8 +103,9 @@ func NewDefaultMultiTenantManager(cfg Config, managerFactory ManagerFactory, reg
 			Name:      "ruler_config_updates_total",
 			Help:      "Total number of config updates triggered by a user",
 		}, []string{"user"}),
-		registry: reg,
-		logger:   logger,
+		registry:               reg,
+		logger:                 logger,
+		notifierOptionsFactory: notifierOptionsFactory,
 	}, nil
 }
 
@@ -296,26 +301,24 @@ func (r *DefaultMultiTenantManager) getOrCreateNotifier(userID string) (*notifie
 	reg := prometheus.WrapRegistererWith(prometheus.Labels{"user": userID}, r.registry)
 	reg = prometheus.WrapRegistererWithPrefix("cortex_", reg)
 	var err error
-	if n, err = newRulerNotifier(&notifier.Options{
-		QueueCapacity:   r.cfg.NotificationQueueCapacity,
-		DrainOnShutdown: true,
-		Registerer:      reg,
-		Do: func(ctx context.Context, client *http.Client, req *http.Request) (*http.Response, error) {
-			// Note: The passed-in context comes from the Prometheus notifier
-			// and does *not* contain the userID. So it needs to be added to the context
-			// here before using the context to inject the userID into the HTTP request.
-			ctx = user.InjectOrgID(ctx, userID)
-			if err := user.InjectOrgIDIntoHTTPRequest(ctx, req); err != nil {
-				return nil, err
-			}
-			// Jaeger complains the passed-in context has an invalid span ID, so start a new root span
-			sp := ot.GlobalTracer().StartSpan("notify", ot.Tag{Key: "organization", Value: userID})
-			defer sp.Finish()
-			ctx = ot.ContextWithSpan(ctx, sp)
-			_ = ot.GlobalTracer().Inject(sp.Context(), ot.HTTPHeaders, ot.HTTPHeadersCarrier(req.Header))
-			return ctxhttp.Do(ctx, client, req)
-		},
-	}, log.With(r.logger, "user", userID)); err != nil {
+
+	doFunc := func(ctx context.Context, client *http.Client, req *http.Request) (*http.Response, error) {
+		// Note: The passed-in context comes from the Prometheus notifier
+		// and does *not* contain the userID. So it needs to be added to the context
+		// here before using the context to inject the userID into the HTTP request.
+		ctx = user.InjectOrgID(ctx, userID)
+		if err := user.InjectOrgIDIntoHTTPRequest(ctx, req); err != nil {
+			return nil, err
+		}
+		// Jaeger complains the passed-in context has an invalid span ID, so start a new root span
+		sp := ot.GlobalTracer().StartSpan("notify", ot.Tag{Key: "organization", Value: userID})
+		defer sp.Finish()
+		ctx = ot.ContextWithSpan(ctx, sp)
+		_ = ot.GlobalTracer().Inject(sp.Context(), ot.HTTPHeaders, ot.HTTPHeadersCarrier(req.Header))
+		return ctxhttp.Do(ctx, client, req)
+	}
+
+	if n, err = newRulerNotifier(r.notifierOptionsFactory(userID, r.cfg.NotificationQueueCapacity, true, reg, doFunc), log.With(r.logger, "user", userID)); err != nil {
 		return nil, err
 	}
 

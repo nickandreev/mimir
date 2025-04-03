@@ -217,6 +217,7 @@ type Limits struct {
 	RulerMaxRuleGroupsPerTenantByNamespace                flagext.LimitsMap[int] `yaml:"ruler_max_rule_groups_per_tenant_by_namespace" json:"ruler_max_rule_groups_per_tenant_by_namespace" category:"experimental"`
 	RulerProtectedNamespaces                              flagext.StringSliceCSV `yaml:"ruler_protected_namespaces" json:"ruler_protected_namespaces" category:"experimental"`
 	RulerMaxIndependentRuleEvaluationConcurrencyPerTenant int64                  `yaml:"ruler_max_independent_rule_evaluation_concurrency_per_tenant" json:"ruler_max_independent_rule_evaluation_concurrency_per_tenant" category:"experimental"`
+	RulerAlertRelabelConfigs                              []*relabel.Config      `yaml:"ruler_alert_relabel_configs" json:"ruler_alert_relabel_configs" category:"experimental"`
 
 	// Store-gateway.
 	StoreGatewayTenantShardSize int `yaml:"store_gateway_tenant_shard_size" json:"store_gateway_tenant_shard_size"`
@@ -1054,6 +1055,10 @@ func (o *Overrides) RulerSyncRulesOnChangesEnabled(userID string) bool {
 // RulerMaxIndependentRuleEvaluationConcurrencyPerTenant returns the maximum number of independent rules that can run concurrently for a given user.
 func (o *Overrides) RulerMaxIndependentRuleEvaluationConcurrencyPerTenant(userID string) int64 {
 	return o.getOverridesForUser(userID).RulerMaxIndependentRuleEvaluationConcurrencyPerTenant
+}
+
+func (o *Overrides) RulerAlertRelabelConfigs(userID string) []*relabel.Config {
+	return o.getOverridesForUser(userID).RulerAlertRelabelConfigs
 }
 
 // StoreGatewayTenantShardSize returns the store-gateway shard size for a given user.
