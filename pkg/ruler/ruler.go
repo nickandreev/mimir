@@ -38,6 +38,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	promnotifier "github.com/prometheus/prometheus/notifier"
 	promRules "github.com/prometheus/prometheus/rules"
@@ -182,6 +183,36 @@ func (cfg *Config) Validate(limits validation.Limits) error {
 
 	if cfg.IndependentRuleEvaluationConcurrencyMinDurationPercentage < 0 {
 		return errInnvalidRuleEvaluationConcurrencyMinDurationPercentage
+	}
+
+	for _, relabelCfg := range limits.RulerAlertRelabelConfigs {
+		if err := relabelCfg.Validate(limits.NameValidationScheme); err != nil {
+			return errors.Wrap(err, "invalid ruler relabel config")
+		}
+	}
+
+	if err := limits.RulerExternalLabels.Validate(func(l labels.Label) error {
+		labelName := model.LabelName(l.Name)
+		labelValue := model.LabelValue(l.Value)
+
+		// Validate according to the configured validation scheme
+		switch limits.NameValidationScheme {
+		case model.LegacyValidation:
+			if !labelName.IsValidLegacy() {
+				return fmt.Errorf("%q is not a valid label name", l.Name)
+			}
+		default:
+			if !labelName.IsValid() {
+				return fmt.Errorf("%q is not a valid label name", l.Name)
+			}
+		}
+
+		if !labelValue.IsValid() {
+			return fmt.Errorf("%q is not a valid label value", l.Value)
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "invalid ruler external labels config")
 	}
 
 	return nil

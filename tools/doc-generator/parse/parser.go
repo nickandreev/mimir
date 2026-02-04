@@ -20,6 +20,7 @@ import (
 	"github.com/grafana/regexp"
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/thanos-io/objstore/providers/s3"
 
@@ -383,6 +384,8 @@ func getFieldCustomType(t reflect.Type) (string, bool) {
 		return "string", true
 	case reflect.TypeOf([]*relabel.Config{}).String():
 		return "relabel_config...", true
+	case reflect.TypeOf(labels.Labels{}).String():
+		return "map of labelname to labelvalue", true
 	case reflect.TypeOf(asmodel.CustomTrackersConfig{}).String():
 		return "map of tracker name (string) to matcher (string)", true
 	case reflect.TypeOf(validation.LabelValueLengthOverLimitStrategy(0)).String():

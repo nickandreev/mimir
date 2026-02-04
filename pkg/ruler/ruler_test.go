@@ -37,6 +37,7 @@ import (
 	prom_testutil "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/promql"
@@ -2881,4 +2882,26 @@ func TestConfig_Validate(t *testing.T) {
 		err := cfg.Validate(*limits)
 		require.ErrorIs(t, err, errInnvalidRuleEvaluationConcurrencyMinDurationPercentage)
 	})
+
+	t.Run("invalid relabel config", func(t *testing.T) {
+		cfg := defaultRulerConfig(t)
+		limits := validation.MockDefaultLimits()
+		limits.RulerAlertRelabelConfigs = []*relabel.Config{
+			{
+				Action: "",
+			},
+		}
+
+		err := cfg.Validate(*limits)
+		require.Error(t, err)
+	})
+	t.Run("invalid external labels", func(t *testing.T) {
+		cfg := defaultRulerConfig(t)
+		limits := validation.MockDefaultLimits()
+		limits.RulerExternalLabels = labels.New(labels.Label{Name: "invalid label", Value: "invalid value"})
+
+		err := cfg.Validate(*limits)
+		require.Error(t, err)
+	})
+
 }

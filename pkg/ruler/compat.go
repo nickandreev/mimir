@@ -22,6 +22,7 @@ import (
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/metadata"
+	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
@@ -226,6 +227,8 @@ type RulesLimits interface {
 	RulerMinRuleEvaluationInterval(userID string) time.Duration
 	RulerMaxRuleEvaluationResults(userID string) int
 	NameValidationScheme(userID string) model.ValidationScheme
+	RulerAlertRelabelConfigs(userID string) []*relabel.Config
+	RulerExternalLabels(userID string) labels.Labels
 }
 
 func MetricsQueryFunc(qf rules.QueryFunc, userID string, queries, failedQueries *prometheus.CounterVec, remoteQuerier bool) rules.QueryFunc {

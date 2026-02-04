@@ -4759,6 +4759,12 @@ ruler_alertmanager_client_config:
 # CLI flag: -ruler.max-rule-evaluation-results
 [ruler_max_rule_evaluation_results: <int> | default = 0]
 
+# (experimental) External labels to add to all alerts and recording rules.
+[ruler_external_labels: <map of labelname to labelvalue> | default = {}]
+
+# (experimental) Relabel configs to apply to all alert notifications.
+[ruler_alert_relabel_configs: <relabel_config...> | default = []]
+
 # The tenant's shard size, used when store-gateway sharding is enabled. Value of
 # 0 disables shuffle sharding for the tenant, that is all tenant blocks are
 # sharded across all store-gateway replicas.

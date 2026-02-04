@@ -19,7 +19,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/prometheus/discovery"
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/notifier"
 	promRules "github.com/prometheus/prometheus/rules"
@@ -73,14 +72,14 @@ func NewDefaultMultiTenantManager(cfg Config, managerFactory ManagerFactory, reg
 	}
 
 	return &DefaultMultiTenantManager{
-		cfg:                cfg,
-		managerFactory:     managerFactory,
-		limits:             limits,
-		dnsResolver:        dnsResolver,
-		refreshMetrics:     refreshMetrics,
-		notifiers:          map[string]*rulerNotifier{},
-		mapper:             newMapper(cfg.RulePath, rulesFS, logger),
-		userManagers:       map[string]RulesManager{},
+		cfg:            cfg,
+		managerFactory: managerFactory,
+		limits:         limits,
+		dnsResolver:    dnsResolver,
+		refreshMetrics: refreshMetrics,
+		notifiers:      map[string]*rulerNotifier{},
+		mapper:         newMapper(cfg.RulePath, rulesFS, logger),
+		userManagers:   map[string]RulesManager{},
 		userManagerMetrics: userManagerMetrics,
 		managersTotal: promauto.With(reg).NewGauge(prometheus.GaugeOpts{
 			Name: "cortex_ruler_managers_total",
@@ -214,7 +213,7 @@ func (r *DefaultMultiTenantManager) syncRulesToManager(user string, groups rules
 	level.Debug(r.logger).Log("msg", "updating rules", "user", user)
 	r.configUpdatesTotal.WithLabelValues(user).Inc()
 
-	err = manager.Update(r.cfg.EvaluationInterval, files, labels.EmptyLabels(), r.cfg.ExternalURL.String(), nil)
+	err = manager.Update(r.cfg.EvaluationInterval, files, r.limits.RulerExternalLabels(user), r.cfg.ExternalURL.String(), nil)
 	if err != nil {
 		r.lastReloadSuccessful.WithLabelValues(user).Set(0)
 		level.Error(r.logger).Log("msg", "unable to update rule manager", "user", user, "err", err)
@@ -326,6 +325,10 @@ func (r *DefaultMultiTenantManager) getOrCreateNotifier(userID string) (*notifie
 	if err != nil {
 		return nil, err
 	}
+
+	notifierCfg.GlobalConfig.ExternalLabels = r.limits.RulerExternalLabels(userID)
+	notifierCfg.GlobalConfig.MetricNameValidationScheme = r.limits.NameValidationScheme(userID)
+	notifierCfg.AlertingConfig.AlertRelabelConfigs = r.limits.RulerAlertRelabelConfigs(userID)
 
 	// This should never fail, unless there's a programming mistake.
 	if err := n.applyConfig(notifierCfg); err != nil {

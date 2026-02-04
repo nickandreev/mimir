@@ -24,6 +24,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/notifier"
+	"github.com/prometheus/prometheus/rules"
 	promRules "github.com/prometheus/prometheus/rules"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -210,6 +211,28 @@ func TestDefaultMultiTenantManager_SyncPartialRuleGroups(t *testing.T) {
 		// Check metrics.
 		assert.Equal(t, 1.0, promtest.ToFloat64(m.managersTotal))
 	})
+}
+
+func TestDefaultMultiTenantManager_FullSyncWithExternalLabels(t *testing.T) {
+	mockLimits := validation.MockOverrides(func(defaults *validation.Limits, tenantLimits map[string]*validation.Limits) {
+		tenantLimits["user1"] = validation.MockDefaultLimits()
+		tenantLimits["user1"].RulerExternalLabels = labels.FromStrings("foo", "bar")
+	})
+
+	m, err := NewDefaultMultiTenantManager(Config{RulePath: t.TempDir()}, managerMockFactory, nil, log.NewNopLogger(), nil, mockLimits, afero.NewMemMapFs())
+	require.NoError(t, err)
+
+	t.Cleanup(m.Stop)
+	m.Start()
+
+	m.SyncFullRuleGroups(context.Background(), map[string]rulespb.RuleGroupList{
+		"user1": {
+			createRuleGroup("group-1", "user1", createRecordingRule("record:1", "1"), createAlertingRule("alert-2", "2"), createRecordingRule("record:3", "3")),
+		},
+	})
+
+	userManager := assertManagerMockRunningForUser(t, m, "user1")
+	require.Equal(t, labels.FromStrings("foo", "bar"), userManager.labels)
 }
 
 func TestFilterRuleGroupsByNotEmptyUsers(t *testing.T) {
@@ -590,6 +613,7 @@ type managerMock struct {
 	done     chan struct{}
 	notifier *notifier.Manager
 	onStop   func()
+	labels   labels.Labels
 }
 
 func (m *managerMock) Run() {
@@ -606,10 +630,12 @@ func (m *managerMock) Stop() {
 	close(m.done)
 }
 
-func (m *managerMock) Update(time.Duration, []string, labels.Labels, string, promRules.GroupEvalIterationFunc) error {
+func (m *managerMock) Update(interval time.Duration, files []string, labels labels.Labels, externalURL string, groupEvalIterationFunc rules.GroupEvalIterationFunc) error {
+	m.labels = labels
 	return nil
 }
 
 func (m *managerMock) RuleGroups() []*promRules.Group {
 	return nil
 }
+

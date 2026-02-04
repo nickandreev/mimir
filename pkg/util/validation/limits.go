@@ -20,6 +20,7 @@ import (
 	"github.com/grafana/dskit/flagext"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/otlptranslator"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/promql/parser"
 	"go.uber.org/atomic"
@@ -261,6 +262,8 @@ type Limits struct {
 	RulerAlertmanagerClientConfig                         notifier.AlertmanagerClientConfig `yaml:"ruler_alertmanager_client_config" json:"ruler_alertmanager_client_config" category:"experimental" doc:"description=Per-tenant Alertmanager client configuration. If not supplied, the tenant's notifications are sent to the ruler-wide default."`
 	RulerMinRuleEvaluationInterval                        model.Duration                    `yaml:"ruler_min_rule_evaluation_interval" json:"ruler_min_rule_evaluation_interval" category:"experimental"`
 	RulerMaxRuleEvaluationResults                         int                               `yaml:"ruler_max_rule_evaluation_results" json:"ruler_max_rule_evaluation_results" category:"experimental"`
+	RulerExternalLabels                                   labels.Labels                     `yaml:"ruler_external_labels" json:"ruler_external_labels" doc:"nocli|description=External labels to add to all alerts and recording rules.|default={}" category:"experimental"`
+	RulerAlertRelabelConfigs                              []*relabel.Config                 `yaml:"ruler_alert_relabel_configs" json:"ruler_alert_relabel_configs" doc:"nocli|description=Relabel configs to apply to all alert notifications.|default=[]" category:"experimental"`
 
 	// Store-gateway.
 	StoreGatewayTenantShardSize        int `yaml:"store_gateway_tenant_shard_size" json:"store_gateway_tenant_shard_size"`
@@ -1311,6 +1314,14 @@ func (o *Overrides) RulerMinRuleEvaluationInterval(userID string) time.Duration 
 // RulerMaxRuleEvaluationResults returns the maximum number of results (alert instances) produced by a single alerting rule evaluation.
 func (o *Overrides) RulerMaxRuleEvaluationResults(userID string) int {
 	return o.getOverridesForUser(userID).RulerMaxRuleEvaluationResults
+}
+
+func (o *Overrides) RulerExternalLabels(userID string) labels.Labels {
+	return o.getOverridesForUser(userID).RulerExternalLabels
+}
+
+func (o *Overrides) RulerAlertRelabelConfigs(userID string) []*relabel.Config {
+	return o.getOverridesForUser(userID).RulerAlertRelabelConfigs
 }
 
 // StoreGatewayTenantShardSize returns the store-gateway shard size for a given user.
